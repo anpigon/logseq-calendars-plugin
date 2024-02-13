@@ -1,17 +1,13 @@
 import "@logseq/libs";
 import {
   BlockEntity,
-  PageEntity,
   SettingSchemaDesc,
 } from "@logseq/libs/dist/LSPlugin.user";
+import axios from "axios";
+import { getDateForPageWithoutBrackets } from "logseq-dateutils";
+import moment from "moment-timezone";
 import ical from "node-ical";
 import type { RRule } from "rrule";
-import axios from "axios";
-import {
-  getDateForPage,
-  getDateForPageWithoutBrackets,
-} from "logseq-dateutils";
-import moment from "moment-timezone";
 import urlRegexSafe from "url-regex-safe";
 
 let mainBlockUUID = "";
@@ -176,16 +172,22 @@ function rawParser(rawData) {
   logseq.App.showMsg("Parsing Calendar Items");
   var eventsArray = [];
   var rawDataV2 = ical.parseICS(rawData);
+  let currentYear = new Date().getFullYear();
+  var recurringStartDate = new Date(currentYear, 0, 1);
+  var recurringEndDate = new Date(currentYear, 11, 31);
+
   for (const dataValue in rawDataV2) {
+    if (!Object.prototype.hasOwnProperty.call(rawDataV2, dataValue)) continue;
+
     const event = rawDataV2[dataValue];
-    if (typeof event.rrule == "undefined") {
+    if (event.type !== "VEVENT" || !event.rrule) {
       //@ts-expect-error
-      eventsArray.push(rawDataV2[dataValue]); //simplifying results, credits to https://github.com/muness/obsidian-ics for this implementations
+      eventsArray.push(event); //simplifying results, credits to https://github.com/muness/obsidian-ics for this implementations
     } else {
       const currentYear = new Date().getFullYear();
       const dates = (event.rrule as RRule).between(
-        new Date(currentYear - 1, 0, 1, 0, 0, 0, 0),
-        new Date(currentYear, 11, 31, 0, 0, 0, 0)
+        recurringStartDate,
+        recurringEndDate
       );
       console.log(dates);
       if (dates.length === 0) continue;
@@ -199,21 +201,23 @@ function rawParser(rawData) {
 
       dates.forEach((date) => {
         let newDate;
-        if (event.rrule.origOptions.tzid) {
+        const rrule = event.rrule as RRule;
+        if (rrule.origOptions.tzid) {
           // tzid present (calculate offset from recurrence start)
-          const dateTimezone = moment.tz.zone("UTC");
+          const dateTimezone = moment.tz.zone("UTC")!;
           const localTimezone = moment.tz.guess();
 
           const tz =
-            event.rrule.origOptions.tzid === localTimezone
-              ? event.rrule.origOptions.tzid
+            rrule.origOptions.tzid === localTimezone
+              ? rrule.origOptions.tzid
               : localTimezone;
-          const timezone = moment.tz.zone(tz);
+          const timezone = moment.tz.zone(tz)!;
           const offset =
-            timezone.utcOffset(date) - dateTimezone.utcOffset(date);
-          // newDate = moment(date).add(offset, "minutes").toDate();
+            timezone.utcOffset(date.getTime()) -
+            dateTimezone.utcOffset(date.getTime());
+          newDate = moment(date).add(offset, "minutes").toDate();
           // console.log(offset)
-          newDate = date;
+          // newDate = date;
           //FIXME: this is a hack to get around the fact that the offset is not being calculated correctly
         } else {
           // tzid not present (calculate offset from original start)
@@ -227,6 +231,7 @@ function rawParser(rawData) {
         }
         const start = moment(newDate);
         const secondaryEvent = { ...event, start: start["_d"] };
+        //@ts-expect-error
         eventsArray.push(secondaryEvent);
       });
 
@@ -425,9 +430,9 @@ async function openCalendar2(calendarName, url) {
     logseq.App.showMsg("Fetching Calendar Items");
     let response2 = await axios.get(url);
     console.log(response2);
-    var hello = await rawParser(response2.data);
+    const payload = await rawParser(response2.data);
     const date = await findDate(preferredDateFormat);
-    insertJournalBlocks(hello, preferredDateFormat, calendarName, date);
+    insertJournalBlocks(payload, preferredDateFormat, calendarName, date);
   } catch (err) {
     if (`${err}` == `Error: Request failed with status code 404`) {
       logseq.App.showMsg("Calendar not found: Check your URL");
