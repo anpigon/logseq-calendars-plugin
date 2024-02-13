@@ -246,6 +246,8 @@ function rawParser(rawData) {
 
 function parseLocation(rawLocation) {
   const matches = rawLocation.match(urlRegexSafe());
+  if(!matches) return null;
+  
   var parsed = rawLocation;
   var linkDesc;
   for (const match of matches) {
@@ -366,12 +368,15 @@ async function insertJournalBlocks(
     try {
       let description = data[dataKey]["description"]; //Parsing result from rawParser into usable data for templateFormatter
       let formattedStart = new Date(data[dataKey]["start"]);
+      if(!formattedStart) continue;
+
       let startDate = getDateForPageWithoutBrackets(
         formattedStart,
         preferredDateFormat
       );
       let startTime = await formatTime(formattedStart);
       let endTime = await formatTime(data[dataKey]["end"]);
+      console.log('startTime', startTime, 'endTime', endTime);
       let location = data[dataKey]["location"];
       let summary;
       summary = data[dataKey]["summary"];
@@ -386,6 +391,7 @@ async function insertJournalBlocks(
         summary,
         location
       );
+      console.log('headerString', headerString);
       if (startDate.toLowerCase() == emptyToday.toLowerCase()) {
         var currentBlock = await logseq.Editor.insertBlock(
           startBlock.uuid,
