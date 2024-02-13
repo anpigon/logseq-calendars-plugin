@@ -1,15 +1,20 @@
 import "@logseq/libs";
-import { BlockEntity, PageEntity, SettingSchemaDesc } from "@logseq/libs/dist/LSPlugin.user";
+import {
+  BlockEntity,
+  PageEntity,
+  SettingSchemaDesc,
+} from "@logseq/libs/dist/LSPlugin.user";
 import ical from "node-ical";
+import type { RRule } from "rrule";
 import axios from "axios";
 import {
   getDateForPage,
   getDateForPageWithoutBrackets,
 } from "logseq-dateutils";
 import moment from "moment-timezone";
-import urlRegexSafe from 'url-regex-safe';
+import urlRegexSafe from "url-regex-safe";
 
-let mainBlockUUID = ""
+let mainBlockUUID = "";
 // const md = require('markdown-it')().use(require('markdown-it-mark'));
 
 const settingsTemplate: SettingSchemaDesc[] = [
@@ -34,7 +39,8 @@ const settingsTemplate: SettingSchemaDesc[] = [
     type: "boolean",
     default: false,
     title: "Indent all events under the same block",
-    description: "If you want to indent all events under the same block, irrespective of the calendar they belong to",
+    description:
+      "If you want to indent all events under the same block, irrespective of the calendar they belong to",
   },
   {
     key: "templateLine2",
@@ -176,9 +182,10 @@ function rawParser(rawData) {
       //@ts-expect-error
       eventsArray.push(rawDataV2[dataValue]); //simplifying results, credits to https://github.com/muness/obsidian-ics for this implementations
     } else {
-      const dates = event.rrule.between(
-        new Date(2021, 0, 1, 0, 0, 0, 0),
-        new Date(2023, 11, 31, 0, 0, 0, 0)
+      const currentYear = new Date().getFullYear();
+      const dates = (event.rrule as RRule).between(
+        new Date(currentYear - 1, 0, 1, 0, 0, 0, 0),
+        new Date(currentYear, 11, 31, 0, 0, 0, 0)
       );
       console.log(dates);
       if (dates.length === 0) continue;
@@ -196,7 +203,7 @@ function rawParser(rawData) {
           // tzid present (calculate offset from recurrence start)
           const dateTimezone = moment.tz.zone("UTC");
           const localTimezone = moment.tz.guess();
-          
+
           const tz =
             event.rrule.origOptions.tzid === localTimezone
               ? event.rrule.origOptions.tzid
@@ -206,7 +213,7 @@ function rawParser(rawData) {
             timezone.utcOffset(date) - dateTimezone.utcOffset(date);
           // newDate = moment(date).add(offset, "minutes").toDate();
           // console.log(offset)
-          newDate = date
+          newDate = date;
           //FIXME: this is a hack to get around the fact that the offset is not being calculated correctly
         } else {
           // tzid not present (calculate offset from original start)
@@ -232,21 +239,21 @@ function rawParser(rawData) {
   return sortDate(eventsArray);
 }
 
-function parseLocation(rawLocation){
+function parseLocation(rawLocation) {
   const matches = rawLocation.match(urlRegexSafe());
   var parsed = rawLocation;
   var linkDesc;
   for (const match of matches) {
-    try{
+    try {
       var url = new URL(match);
-      linkDesc = url.hostname + '/...';
-    } catch (e){
+      linkDesc = url.hostname + "/...";
+    } catch (e) {
       //this really shouldn't happen
       //but if the regex returns a url that URL doesn't like, just use the whole link
       linkDesc = match;
     }
     //console.log('match', match);
-    parsed = parsed.replace(match, '[' + linkDesc + '](' + match + ')');
+    parsed = parsed.replace(match, "[" + linkDesc + "](" + match + ")");
   }
   return parsed;
 }
@@ -342,10 +349,14 @@ async function insertJournalBlocks(
   // logseq.App.pushState('page', { name: pageID.name })
   // let pageBlocks = await logseq.Editor.getPageBlocksTree(pageID.name)
   // let footerBlock = pageBlocks[pageBlocks.length -1]
-  let startBlock = (await logseq.Editor.insertBlock(pageID!.name, calendarName, {
-    sibling: true,
-    isPageBlock: true,
-  })) as BlockEntity;
+  let startBlock = (await logseq.Editor.insertBlock(
+    pageID!.name,
+    calendarName,
+    {
+      sibling: true,
+      isPageBlock: true,
+    }
+  )) as BlockEntity;
   for (const dataKey in data) {
     try {
       let description = data[dataKey]["description"]; //Parsing result from rawParser into usable data for templateFormatter
@@ -354,7 +365,7 @@ async function insertJournalBlocks(
         formattedStart,
         preferredDateFormat
       );
-      let startTime = await formatTime(formattedStart) ;
+      let startTime = await formatTime(formattedStart);
       let endTime = await formatTime(data[dataKey]["end"]);
       let location = data[dataKey]["location"];
       let summary;
@@ -401,7 +412,7 @@ async function insertJournalBlocks(
   }
   let updatedBlock = await logseq.Editor.getBlock(startBlock.uuid, {
     includeChildren: true,
-  })
+  });
   if (updatedBlock?.children?.length == 0) {
     logseq.Editor.removeBlock(startBlock.uuid);
     logseq.App.showMsg("No events for the day detected");
@@ -416,12 +427,7 @@ async function openCalendar2(calendarName, url) {
     console.log(response2);
     var hello = await rawParser(response2.data);
     const date = await findDate(preferredDateFormat);
-    insertJournalBlocks(
-      hello,
-      preferredDateFormat,
-      calendarName,
-      date
-    );
+    insertJournalBlocks(hello, preferredDateFormat, calendarName, date);
   } catch (err) {
     if (`${err}` == `Error: Request failed with status code 404`) {
       logseq.App.showMsg("Calendar not found: Check your URL");
@@ -430,12 +436,10 @@ async function openCalendar2(calendarName, url) {
   }
 }
 async function main() {
-
   let accounts2 = {};
   if (logseq.settings?.useJSON) {
-    accounts2 = logseq.settings.accountsDetails
-  }
-  else {
+    accounts2 = logseq.settings.accountsDetails;
+  } else {
     if (
       logseq.settings?.calendar2Name != "" &&
       logseq.settings?.calendar2URL != ""
@@ -477,7 +481,6 @@ async function main() {
   });
 
   for (const accountName in accounts2) {
-   
     let accountSetting = accounts2[accountName];
     logseq.App.registerCommandPalette(
       {
