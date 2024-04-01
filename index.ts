@@ -184,12 +184,11 @@ function rawParser(rawData) {
       //@ts-expect-error
       eventsArray.push(event); //simplifying results, credits to https://github.com/muness/obsidian-ics for this implementations
     } else {
-      const currentYear = new Date().getFullYear();
       const dates = (event.rrule as RRule).between(
         recurringStartDate,
         recurringEndDate
       );
-      console.log(dates);
+      console.log("dates", dates);
       if (dates.length === 0) continue;
 
       console.log("Summary:", event.summary);
@@ -203,22 +202,7 @@ function rawParser(rawData) {
         let newDate;
         const rrule = event.rrule as RRule;
         if (rrule.origOptions.tzid) {
-          // tzid present (calculate offset from recurrence start)
-          const dateTimezone = moment.tz.zone("UTC")!;
-          const localTimezone = moment.tz.guess();
-
-          const tz =
-            rrule.origOptions.tzid === localTimezone
-              ? rrule.origOptions.tzid
-              : localTimezone;
-          const timezone = moment.tz.zone(tz)!;
-          const offset =
-            timezone.utcOffset(date.getTime()) -
-            dateTimezone.utcOffset(date.getTime());
-          newDate = moment(date).add(offset, "minutes").toDate();
-          // console.log(offset)
-          // newDate = date;
-          //FIXME: this is a hack to get around the fact that the offset is not being calculated correctly
+          newDate = date;
         } else {
           // tzid not present (calculate offset from original start)
           newDate = new Date(
@@ -246,8 +230,8 @@ function rawParser(rawData) {
 
 function parseLocation(rawLocation) {
   const matches = rawLocation.match(urlRegexSafe());
-  if(!matches) return null;
-  
+  if (!matches) return null;
+
   var parsed = rawLocation;
   var linkDesc;
   for (const match of matches) {
@@ -280,7 +264,7 @@ function templateFormatter(
   if (description == "") {
     properDescription = "No Description";
   } else {
-    properDescription = description.split('\n')[0];
+    properDescription = description.split("\n")[0];
   }
   if (location == "") {
     properLocation = "No Location";
@@ -353,9 +337,6 @@ async function insertJournalBlocks(
   let pageID = await logseq.Editor.createPage(emptyToday, {
     createFirstBlock: true,
   });
-  // logseq.App.pushState('page', { name: pageID.name })
-  // let pageBlocks = await logseq.Editor.getPageBlocksTree(pageID.name)
-  // let footerBlock = pageBlocks[pageBlocks.length -1]
   let startBlock = (await logseq.Editor.insertBlock(
     pageID!.name,
     calendarName,
@@ -368,7 +349,7 @@ async function insertJournalBlocks(
     try {
       let description = data[dataKey]["description"]; //Parsing result from rawParser into usable data for templateFormatter
       let formattedStart = new Date(data[dataKey]["start"]);
-      if(!formattedStart) continue;
+      if (!formattedStart) continue;
 
       let startDate = getDateForPageWithoutBrackets(
         formattedStart,
@@ -376,11 +357,9 @@ async function insertJournalBlocks(
       );
       let startTime = await formatTime(formattedStart);
       let endTime = await formatTime(data[dataKey]["end"]);
-      console.log('startTime', startTime, 'endTime', endTime);
       let location = data[dataKey]["location"];
       let summary;
       summary = data[dataKey]["summary"];
-      // }
       // using user provided template
       let headerString = templateFormatter(
         logseq.settings?.template,
@@ -391,7 +370,6 @@ async function insertJournalBlocks(
         summary,
         location
       );
-      console.log('headerString', headerString);
       if (startDate.toLowerCase() == emptyToday.toLowerCase()) {
         var currentBlock = await logseq.Editor.insertBlock(
           startBlock.uuid,
@@ -416,9 +394,7 @@ async function insertJournalBlocks(
         }
       }
     } catch (error) {
-      console.log(data[dataKey]);
-      console.log("error");
-      console.log(error);
+      console.error("ERROR", data[dataKey], error);
     }
   }
   let updatedBlock = await logseq.Editor.getBlock(startBlock.uuid, {
@@ -434,9 +410,9 @@ async function openCalendar2(calendarName, url) {
     const userConfigs = await logseq.App.getUserConfigs();
     const preferredDateFormat = userConfigs.preferredDateFormat;
     logseq.App.showMsg("Fetching Calendar Items");
-    let response2 = await axios.get(url);
-    console.log(response2);
-    const payload = await rawParser(response2.data);
+    const response = await axios.get(url);
+    console.log("response", response);
+    const payload = await rawParser(response.data);
     const date = await findDate(preferredDateFormat);
     insertJournalBlocks(payload, preferredDateFormat, calendarName, date);
   } catch (err) {
