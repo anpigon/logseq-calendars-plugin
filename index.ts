@@ -347,21 +347,21 @@ async function insertJournalBlocks(
   )) as BlockEntity;
   for (const dataKey in data) {
     try {
-      let description = data[dataKey]["description"]; //Parsing result from rawParser into usable data for templateFormatter
-      let formattedStart = new Date(data[dataKey]["start"]);
-      if (!formattedStart) continue;
+      const description = data[dataKey]["description"]; //Parsing result from rawParser into usable data for templateFormatter
+      const start = data[dataKey]?.["start"];
+      if (!start) continue;
+      const formattedStart = new Date(start);
 
       let startDate = getDateForPageWithoutBrackets(
         formattedStart,
         preferredDateFormat
       );
-      let startTime = await formatTime(formattedStart);
-      let endTime = await formatTime(data[dataKey]["end"]);
-      let location = data[dataKey]["location"];
-      let summary;
-      summary = data[dataKey]["summary"];
+      const startTime = await formatTime(formattedStart);
+      const endTime = await formatTime(data[dataKey]["end"]);
+      const location = data[dataKey]["location"];
+      const summary = data[dataKey]["summary"];
       // using user provided template
-      let headerString = templateFormatter(
+      const headerString = templateFormatter(
         logseq.settings?.template,
         description,
         startDate,
@@ -371,13 +371,13 @@ async function insertJournalBlocks(
         location
       );
       if (startDate.toLowerCase() == emptyToday.toLowerCase()) {
-        var currentBlock = await logseq.Editor.insertBlock(
+        const currentBlock = await logseq.Editor.insertBlock(
           startBlock.uuid,
           `${headerString.replaceAll("\\n", "\n")}`,
           { sibling: false }
         );
         if (logseq.settings?.templateLine2 != "") {
-          let SecondTemplateLine = templateFormatter(
+          const SecondTemplateLine = templateFormatter(
             logseq.settings?.templateLine2,
             description,
             startDate,
